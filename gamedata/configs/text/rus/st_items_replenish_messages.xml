@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+
+	<string id="st_not_same_tank">
+		<text>%c[d_red]Вам нужны те же резервуары кислорода, чтобы консолидировать их подачу воздуха!</text>
+	</string>
+
+	<string id="st_not_same_filter">
+		<text>%c[d_red]Вам нужны идентичные маски фильтры, чтобы исправить их состояние!</text>
+	</string>
+	
+	<string id="st_filter_on">
+		<text>Фильтр маски теперь оборудован.</text>
+	</string>
+	
+	<string id="st_filter_on_tanks_removed">
+		<text>Фильтр маски теперь оборудован: ваши резервуары кислорода были сняты...</text>
+	</string>
+
+	<string id="st_already_has_equipment">
+		<text>%c[d_red]У тебя уже есть кислородный бак, или ваша маска имеет фильтр, оборудованный, или У тебя нет подходящего шлема!</text>
+	</string>
+	
+</string_table>

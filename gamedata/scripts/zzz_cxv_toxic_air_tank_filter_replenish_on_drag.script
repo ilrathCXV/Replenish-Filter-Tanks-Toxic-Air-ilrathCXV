@@ -1,0 +1,108 @@
+-- Consolidate Tanks and Filters for Toxic Air - ilrathCXV (last edit: 04/13/2024)
+-- Adapted from GAMMA's Artefact Melter Charge script
+
+local gc 		  = game.translate_string
+
+local filters = {
+["af_mask_filter_homemade"] = 1,
+["af_mask_filter_ms4"] = 2,
+["af_mask_filter_1"] = 3,
+["af_mask_filter_1sci"] = 4,
+["af_mask_filter_dp1"] = 5,
+["af_mask_filter_2"] = 6,
+["af_mask_filter_2dolg"] = 7,
+["af_mask_filter_mof6"] = 8,
+["af_mask_filter_3"] = 9,
+["af_mask_filter_fp5"] = 0,	-- 10 - debug item so it is set to zero to ignore
+["af_mask_filter_r18"] = 11,
+["af_mask_filter_3isg"] = 12,
+}
+
+local tanks = {
+["af_oxygen_tank_1"] = 20,
+["af_oxygen_tank_1soviet"] = 21,
+["af_oxygen_tank_2"] = 22,
+["af_oxygen_tank_3"] = 23,
+["af_oxygen_tank_3military"] = 0,	-- 24 - debug item so it is set to zero to ignore
+}
+
+function recharge(cond_1, cond_2)
+	if (not cond_1) then return end
+	if (cond_1 > 0.99) then return end
+	
+	if (not cond_2) then return end
+	if (cond_2 > 0.99) then return end
+	
+	local return_val = cond_1 + cond_2
+	
+	return return_val
+end
+
+local function on_item_drag_dropped(obj_1, obj_2, slot_from, slot_to)
+	-- Check if both items are in the the player's bag
+	if not (slot_from == EDDListType.iActorBag and slot_to == EDDListType.iActorBag) then
+        return
+    end
+		
+	local sec_1 = obj_1:section()
+	local sec_2 = obj_2:section()
+	
+	local is_tank_1 = tanks[sec_1] or 0
+	local is_filter_1 = filters[sec_1] or 0
+	
+	-- first item is neither a tank nor a filter
+	if (is_tank_1 == 0) and (is_filter_1 == 0) then return end
+	
+	local is_tank_2 = tanks[sec_2] or false
+	local is_filter_2 = filters[sec_2] or false
+	
+	-- both items are tanks but not identical...
+	if is_tank_2 and is_tank_1 > 0 and (is_tank_2 ~= is_tank_1) then
+		news_manager.send_tip(db.actor, gc("st_not_same_tank"), 0, nil, 5000)
+		return 
+	end
+	
+	-- both items are filters but not identical
+	if is_filter_2 and is_filter_1 > 0 and (is_filter_2 ~= is_filter_1) then 
+		news_manager.send_tip(db.actor, gc("st_not_same_filter"), 0, nil, 5000)
+		return
+	end
+	
+	-- second item is neither a tank nor a filter
+	if not is_tank_2 and not is_filter_2 then return end
+	
+	-- items are valid, but not matching types of items
+	if is_filter_1 > 0 and not is_filter_2 then return end
+	if is_tank_1 > 0 and not is_tank_2 then return end
+	
+	-- now, time for the magic
+	original_val = obj_1:condition()
+	regen_val = obj_2:condition()
+	local new_val = recharge( original_val , regen_val ) or 0
+	if new_val > 0 and new_val > original_val and new_val > regen_val then
+		if (is_filter_1 ~= 0) then
+			alife_release(obj_2)
+			obj_1:set_condition(clamp(new_val, original_val, 1))
+			local filter_snd = sound_object("toxic_air\\filter_use_on")
+			filter_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
+			xr_sound.set_sound_play(AC_ID,"filter_use_on")
+		elseif (is_tank_1 ~= 0) then
+			if new_val > 1 then
+				obj_1:set_condition(clamp(new_val, original_val, 1))
+				obj_2:set_condition(clamp((new_val - 1), 0.01, regen_val))
+				local tanks_filled_snd = sound_object("toxic_air\\ta_tank_on")
+				tanks_filled_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
+			else
+				alife_release(obj_2)
+				obj_1:set_condition(clamp(new_val, original_val, 1))
+				local tanks_consolidated_snd = sound_object("toxic_air\\ta_tank_off")
+				tanks_consolidated_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
+			end
+			
+		end
+	end
+end
+
+function on_game_start()
+	RegisterScriptCallback("ActorMenu_on_item_drag_drop",on_item_drag_dropped)
+end

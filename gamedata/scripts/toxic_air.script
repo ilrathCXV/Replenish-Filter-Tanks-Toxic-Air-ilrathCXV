@@ -1,0 +1,1226 @@
+-- Added messages to better communicate what is happening - ilrathCXV (last edit: 04/13/2024)
+
+local toxic_dmg = 0
+local tmr_upd
+local tmr_dgr
+local tank_cond = {}
+local tank_air_protection = 0
+local filter_air_protection = 0
+local effects_factor = 0
+local tank_anm_length = 4
+local filters = {}
+local tanks = {}
+local rnd = math.random
+local sfind = string.find
+local gc = game.translate_string
+
+local oxt_tbl = {
+	["af_oxygen_tank_1"] = true,
+	["af_oxygen_tank_1soviet"] = true,
+	["af_oxygen_tank_2"] = true,
+	["af_oxygen_tank_3"] = true,
+	["af_oxygen_tank_3military"] = true,
+	["af_mask_filter_homemade"] = true,
+	["af_mask_filter_1"] = true,
+	["af_mask_filter_1sci"] = true,
+	["af_mask_filter_ms4"] = true,
+	["af_mask_filter_dp1"] = true,
+	["af_mask_filter_2"] = true,
+	["af_mask_filter_mof6"] = true,
+	["af_mask_filter_2dolg"] = true,
+	["af_mask_filter_3"] = true,
+	["af_mask_filter_fp5"] = true,
+	["af_mask_filter_3isg"] = true,
+	["af_mask_filter_r18"] = true,
+}
+
+local toxic_level = {
+	-- <= 0
+		["l01_escape"]						= 0,
+		["k00_marsh"]						= 0,
+		["y04_pole"]							= 0,
+		["k01_darkscape"]				= 0,
+		["l03_agroprom"]					= 0,
+		["l05_bar"]							= 0,
+		["l04_darkvalley"]					= 0,
+
+	-- <= 0.1
+		["l02_garbage"]					= 0.075,		-- 44 irl mins to lose health from 1.0 to 0 without any protection
+		["l08_yantar"]						= 0.065,
+
+
+	-- < 0.2
+		["k02_trucks_cemetery"]		= 0.17,
+		["jupiter"]								= 0.18,
+		["zaton"]								= 0.18,
+		["l07_military"]						= 0.18,
+		["l09_deadcity"]					= 0.15,
+		["l06_rostok"]						= 0.16,
+
+	-- < 0.3
+		["l10_radar"]						= 0.2,
+		["l10_red_forest"]					= 0.2,
+		["l10_limansk"]						= 0.225,
+		["l11_pripyat"]						= 0.25,
+		["pripyat"]							= 0.25,
+
+	-- <= 0.5
+		["l11_hospital"]						= 0.3,
+		["l12_stancia"]						= 0.42,
+		["l12_stancia_2"]					= 0.45,			-- 7
+		["l13_generators"]				= 0.5,
+
+	-- Labs
+		["l03u_agr_underground"]		= 0.4,
+		["l04u_labx18"]					= 0.45,
+		["l08u_brainlab"]					= 0.61,
+		["jupiter_underground"]		= 0.65,
+		["l10u_bunker"]					= 0.7,
+		["labx8"]								= 0.75,
+		["l12u_control_monolith"]		= 0.85,
+		["l12u_sarcofag"]					= 0.9,
+		["l13u_warlab"]					= 1.0,
+}
+
+local safe_smart_radius = {
+	--dead city
+		["cit_killers"] = 51,
+		["cit_killers_vs_bandits"] = 41,
+	--pripyat
+		["pri_monolith"] = 37,
+		["mlr_terrain"] = 35,
+	--pripyat outskirts
+		["pri_a18_smart_terrain"] = 27,
+		["pri_a16_mlr_copy"] = 15,
+		["pri_a16"] = 20,
+		["pri_a17"] = 20,
+	--mil warehouse
+		["mil_smart_terrain_7_10"] = 51,
+		["mil_smart_terrain_7_7"] = 71,
+		["mil_smart_terrain_7_12"] = 60,
+		["mil_smart_terrain_7_8"] = 56,
+	--yantar
+		["yan_smart_terrain_6_4"] = 51,
+	--agroprom
+		["agr_smart_terrain_1_6_near_1"] = 62,
+		["agr_smart_terrain_1_6_near_2"] = 74,
+		["agr_smart_terrain_1_6"] = 61,
+		["agr_smart_terrain_4_4_near_2"] = 25,
+		["agr_smart_terrain_4_4_near_3"] = 34,
+		["agr_smart_terrain_4_4_near_1"] = 31,
+		["agr_smart_terrain_4_4"] = 45,
+	--garbage
+		["gar_smart_terrain_3_5"] = 60,
+		["gar_smart_terrain_5_2"] = 36,
+	--dark valley
+		["val_smart_terrain_7_4"] = 41,
+		["val_smart_terrain_7_3"] = 55,
+		["val_smart_terrain_7_5"] = 39,
+		["val_smart_terrain_8_6"] = 25,
+	--darkscape
+		["ds2_domik_st"] = 51,
+	--escape
+		["esc_smart_terrain_5_7"] = 43,
+		["esc_smart_terrain_2_12"] = 67,
+	--marsh
+		["mar_smart_terrain_10_5"] = 51,
+		["mar_smart_terrain_3_3"] = 31,
+		["mar_smart_terrain_doc"] = 11,
+		["mar_smart_terrain_base"] = 36,
+	--zaton
+		["zat_stalker_base_smart"] = 27,
+		["zat_b18"] = 12,
+		["zat_b40_smart_terrain"] = 33,
+	-- jupiter
+		["jup_a6"] = 500,
+		["jup_b41"] = 355,
+	-- bar
+		["bar_zastava"] = 51,
+		["bar_visitors"] = 60,
+		["bar_zastava_2"] = 60,
+		["bar_dolg_general"] =  70,
+		["bar_dolg_bunker"] =  70,
+	-- red forest
+		["red_smart_terrain_3_2"] = 70,
+}
+
+local blacklisted_helmets = {
+	["helm_bandana"] = true,
+	["helm_cloth_mask"] = true,
+	["helm_rp_bala"] = true,
+	["helm_hardhat"] = true,
+	["helm_ach7"] = true,
+}
+
+function actor_on_first_update()
+	if toxic_air_mcm.get_config("delete_items") then
+		for i = 1, 65534 do
+			if alife_object(i) and oxt_tbl[alife_object(i):section_name()] then
+				alife_release(alife_object(i))
+				tank_cond = {}
+			end
+			filters = {}
+			tanks = {}
+		end
+	end
+
+	toxic_dmg = toxic_level[level.name()] or 0
+
+	if (toxic_air_mcm.get_config("mono_sin_exception")) and ( (character_community(db.actor) == "actor_greh") or ( character_community(db.actor) == "actor_monolith") ) and ( (level.name() == "l10_red_forest") or (level.name() == "l11_pripyat" ) ) then
+		toxic_dmg = 0
+	end
+
+	if ( (character_community(db.actor) == "actor_greh") or ( character_community(db.actor) == "actor_zombied") ) then
+		toxic_dmg = 0
+	end
+
+	CreateTimeEvent("first_upd_delay", "first_upd_delay", 1, first_upd_message)
+
+end
+
+function first_upd_message()
+	if (tank_air_protection + filter_air_protection) < toxic_dmg then
+		actor_menu.set_msg(1, gc("st_air_is_toxic"), 4)
+	end
+
+	return true
+end
+
+function save_state(m_data)
+    m_data.tank_cond = tank_cond
+	m_data.filters = filters
+end
+
+function load_state(m_data)
+    tank_cond = m_data.tank_cond or {}
+	filters = m_data.filters or {}
+end
+
+------------------ manage equipment slot/ruck/belt -------------
+function available_equipment(item)
+	if item and ( IsOutfit(item) and (not SYS_GetParam(1, item:section(), "helmet_avaliable")) or ( IsHeadgear(item) and (not blacklisted_helmets[item:section()]) )) then
+		return true
+	end
+
+	return false
+end
+
+function slot_has_filter()
+	local outfit = db.actor:item_in_slot(7)
+	local helmet = db.actor:item_in_slot(12)
+	if (outfit and filters[outfit:id()]) or (helmet and filters[helmet:id()]) then
+		return true
+	end
+	
+	if not helmet then
+		return true
+	end
+
+	return false
+end
+
+-- tank_to_belt
+local prevent_anm = false
+function tank_in_belt(tank)
+	if not (tank and oxt_tbl[tank:section()]) then return end
+
+	if (not is_empty(tanks)) or slot_has_filter() then		--	belt already has tank OR equipment has active filter - move tank to ruck
+		db.actor:move_to_ruck(tank)		-- doesnt seem to fire tank_out_belt
+		news_manager.send_tip(db.actor, gc("st_already_has_equipment"), 0, nil, 5000)	-- ilrathCXV (04/13/2024)
+	else																			-- belt has no tanks and equipment has no filters - save tank ID
+		tanks[tank:id()] = true
+		play_ta_anm("on")		-- tank on animation
+	end
+
+end
+
+-- tank to ruck / tank on item drop
+function tank_out_belt(tank)
+	if not (tank and tanks[tank:id()]) then return end
+
+	tanks[tank:id()] = nil
+	tank_air_protection = 0
+
+	play_ta_anm("off")		-- tank off animation
+
+end
+
+-- filter_to_slot
+function filter_to_slot(equip)
+	if equip and filters[equip:id()] then						-- if equipment with filter goes to slot - move tank to ruck
+		local tanks_removed = false
+		db.actor:iterate_belt( function(owner, tank)
+			if tanks[tank:id()] then
+				db.actor:move_to_ruck(tank)					-- tank_out_belt fires
+				tanks_removed = true
+			end
+		end)
+	end
+	
+	if tanks_removed then
+		news_manager.send_tip(db.actor, gc("st_tanks_removed"), 0, nil, 5000)	-- ilrathCXV (04/13/2024)
+	end
+	
+end
+
+-------------- damage actor / manage ppe and sound -----------
+function damage_actor()
+	local summary_air_protection = tank_air_protection + filter_air_protection
+	local air_dmg_prot_diff = toxic_dmg - summary_air_protection
+	air_dmg_prot_diff = (summary_air_protection > toxic_dmg) and 0 or air_dmg_prot_diff
+
+	local safe_zone = actor_in_safe_zone()
+	if air_dmg_prot_diff <= 0 or safe_zone then
+		if effects_factor >= 0.0015 then
+			effects_factor = effects_factor - 0.0015
+			level.set_pp_effector_factor(20201, effects_factor)
+		else
+			level.remove_pp_effector(20201)
+		end
+		RemoveTimeEvent("toxic_zone_x", "toxic_zone_x")
+		return
+	end
+
+	-- dmg
+	local hit_power = (summary_air_protection > 0) and air_dmg_prot_diff or toxic_dmg
+	hit_power = hit_power * 0.005 * toxic_air_mcm.get_config("toxic_damage_mult")
+	local actor_hp = db.actor.health
+	local actor_hp_reduction = actor_hp - hit_power
+--	printf("actor_hp - hit_power = new_actor_hp ===> %s - %s = %s", round_idp(actor_hp, 4), hit_power, round_idp(actor_hp - hit_power, 4))
+--	printf("effects_factor: %s", effects_factor)
+
+	CreateTimeEvent("toxic_zone_x", "toxic_zone_x", 30, send_actor_msg)
+	db.actor:set_health_ex(actor_hp_reduction)
+
+	-- ppe
+	acid_ppe(hit_power)
+	level.set_pp_effector_factor(20201, effects_factor)
+
+	-- sound
+	cough_snd()
+
+end
+
+function acid_ppe(power)
+	if not (toxic_air_mcm.get_config("ppe_toggle")) then return end
+
+	local ppe_max_power = clamp(power * 100, 0.15, 1)
+	if ppe_max_power > effects_factor then
+		effects_factor = effects_factor + 0.0015		-- (+0.0015) = 132 sec to 1.0
+		level.add_pp_effector("acidic_mine.ppe", 20201, true)
+	end
+
+end
+
+function cough_snd()
+	if not (toxic_air_mcm.get_config("sound_toggle")) then return end
+
+	local chance_to_play = effects_factor * 25
+	if (rnd(100) > chance_to_play) then return end
+
+	local snd
+	if effects_factor < 0.1 then return end
+
+	if effects_factor < 0.4 then
+		snd = sound_object("actor\\health_2toxicair_" .. rnd(1, 4))
+	elseif effects_factor < 0.7 then
+		snd = sound_object("actor\\health_1toxicair_" .. rnd(0, 4))
+	else
+		snd = sound_object("actor\\die" .. rnd(0, 3))
+	end
+
+	snd:play(db.actor, 0, sound_object.s2d)
+
+end
+
+function send_actor_msg()
+	actor_menu.set_msg(1, gc("st_air_is_toxic"), 3)
+	return true
+end
+
+------------------------ smart terrain check ----------------------
+function actor_in_safe_zone()
+	local id = smart_terrain.nearest_to_actor_smart.id
+	local smart = id and alife_object(id)
+	local dist = smart_terrain.nearest_to_actor_smart.dist
+
+	if (smart) and (safe_smart_radius[smart:name()]) and (dist <= safe_smart_radius[smart:name()]) then
+	--	printf("id: [ %s ] || name: [ %s ] || dist: [ %s ] || safe: [ true ]", id, smart:name(), round_idp(dist, 2))
+		return true
+	end
+
+	return false
+end
+
+------------------------------- filters ----------------------------
+function filter_cond_prot()
+	filter_air_protection = 0
+	if (toxic_dmg <= 0) then return end
+
+	local outfit = db.actor:item_in_slot(7)
+	local outfit_id = outfit and outfit:id()
+	local helmet = db.actor:item_in_slot(12)
+	local helmet_id = helmet and helmet:id()
+
+	local item
+	if filters[outfit_id] then
+		item = outfit
+	elseif filters[helmet_id] then
+		item = helmet
+	end
+	if not (item) then return end
+
+	local item_id = item:id()
+	local filter_resist = ini_sys:r_float_ex(filters[item_id].name, "air_immunity") or 0
+	if filter_resist <= toxic_dmg then return end
+
+	local cond_loss = ini_sys:r_float_ex(filters[item_id].name, "flow_rate") or 0
+	local cond_loss_factor = ini_sys:r_float_ex(filters[item_id].name, "flow_factor") or 0
+
+	local cond_koef = (toxic_dmg / filter_resist)^cond_loss_factor
+	local condition_hit = cond_loss * cond_koef * toxic_air_mcm.get_config("flow_rate_mult")
+	local safe_zone = actor_in_safe_zone()
+	condition_hit = safe_zone and 0 or condition_hit
+	filters[item_id].cond = filters[item_id].cond - condition_hit
+	filters[item_id].cond = clamp(filters[item_id].cond, 0, 1)
+
+	local filter_resist = ini_sys:r_float_ex(filters[item_id].name, "air_immunity") or 0
+	filter_air_protection = filters[item_id].cond > 0 and filter_air_protection + filter_resist or 0
+
+--	printf("filter [ %s ] , in item [ %s ] , condition [ %s ]", filters[item_id].name, item:section(), filters[item_id].cond)
+
+end
+
+-- on right click remove
+function menu_filters(obj)
+	local p = obj:parent()
+	if not (p and p:id() == AC_ID) then return end
+
+	local id = obj and obj:id()
+
+	if not (filters[id]) then return end
+
+	return gc("st_remove_filter")
+end
+
+function func_filters(obj)
+	local p = obj:parent()
+	if not (p and p:id() == AC_ID) then return end
+
+	local id = obj and obj:id()
+	local sec = obj and obj:section()
+	local name = filters[id].name
+	local con = filters[id].cond
+
+	if not (filters[id]) then return end
+
+	alife_create_item(name, db.actor, {cond = con})
+
+	-- play "off" animation for slotted item
+	local outfit = db.actor:item_in_slot(7)
+	local outfit_id = outfit and outfit:id()
+	local helmet = db.actor:item_in_slot(12)
+	local helmet_id = helmet and helmet:id()
+
+	local item
+	if filters[outfit_id] then
+		item = outfit
+	elseif filters[helmet_id] then
+		item = helmet
+	end
+
+	if item then
+		local item_id = item:id()
+		if filters[item_id] then
+			play_ta_anm(nil, "off", 0)		-- filter off animation
+		end
+	end
+
+--	news_manager.send_tip(db.actor, string.format("item [ %s ] created with condition [ %s ]", name, con), 0, nil, 1500)
+	filters[id] = nil
+
+end
+
+local hud_fov = nil
+function on_item_drag_dropped(give, take, slot_from, slot_to)
+	if not (slot_from == EDDListType.iActorBag and (slot_to == EDDListType.iActorBag or slot_to == EDDListType.iActorSlot)) then
+		return
+	end
+
+	local sec_give = give and give:section()
+	local sec_take = take and take:section()
+	local id_take = take:id()
+
+	-- is given item filter?
+	if not (sfind(sec_give, "mask_filter")) then return end
+
+	-- is item tagged to receive filters + is item also not a filter?
+	if not (available_equipment(take)) then
+		if not (sfind(sec_take, "mask_filter")) then
+			-- ilrathCXV (04/13/2024): ensure this message only triggers if item being dragged to is not a filter
+			news_manager.send_tip(db.actor, gc("st_wrong_equip"), 0, nil, 1500)	
+		end
+		return
+	end
+
+	-- does item already have filter?
+	if (filters[id_take] ~= nil) then
+		news_manager.send_tip(db.actor, gc("st_already_active"), 0, nil, 1500)
+		return
+	end
+
+	-- save shet and release
+	filters[id_take] = {}
+	filters[id_take].name = sec_give
+	filters[id_take].cond = give:condition()
+--	printf("equipment id: [ %s ] , sec: [ %s ] , cond: [ %s ]", id_take, filters[id_take].name, round_idp(filters[id_take].cond, 2))
+	alife_release(give)
+
+	if tank_cond[give:id()] then tank_cond[give:id()] = nil end
+
+	-- remove tanks from belt if filter attached to active slot
+	local outfit = db.actor:item_in_slot(7)
+	local outfit_id = outfit and outfit:id()
+	local helmet = db.actor:item_in_slot(12)
+	local helmet_id = helmet and helmet:id()
+
+	local item
+	if filters[outfit_id] then
+		item = outfit
+	elseif filters[helmet_id] then
+		item = helmet
+	end
+	if not (item) then return end
+
+	local item_id = item:id()
+	if item and filters[item_id] then
+		-- check tanks on belt
+		local tank_on_belt = false
+		
+		local animations_enabled = toxic_air_mcm.get_config("filter_animation")
+		
+		db.actor:iterate_belt( function(owner, tank)
+			if (oxt_tbl[tank:section()]) then
+				tank_on_belt = true
+				db.actor:move_to_ruck(tank)
+			end
+		end)
+
+	-- play tank "off" anm if tank removed and delay filter anm
+		if tank_on_belt then
+			play_ta_anm("off", "on", tank_anm_length)		-- tank off + filter on animation
+			if not animations_enabled then
+				news_manager.send_tip(db.actor, gc("st_filter_on_tanks_removed"), 0, nil, 5000)		-- ilrathCXV (04/13/2024)
+			end
+		else
+		-- or play filter "on" animation for slotted item
+			play_ta_anm(nil, "on", 0)		-- filter on animation
+			if not animations_enabled then
+				news_manager.send_tip(db.actor, gc("st_filter_on"), 0, nil, 5000)					-- ilrathCXV (04/13/2024)
+			end
+		end
+	end
+
+--	news_manager.send_tip(db.actor, string.format("item [ %s ] released, item [ %s ] receive", sec_give, sec_take), 0, nil, 1500)
+
+end
+
+-- manual table check coz binder sucks
+function server_id_table_check()
+	local sim = alife()
+	for id, whatever in pairs(tank_cond) do
+		local se_obj = alife_object(id)
+		if not (se_obj) then
+			tank_cond[id] = nil
+		end
+	end
+
+end
+
+-- arti's UI monkey patch
+function get_cond_for_ui(obj, val)
+	local filter_resist
+	local condition_hit
+	if val == "gear" then
+		filter_resist = ini_sys:r_float_ex(filters[obj:id()].name, "air_immunity") or 0
+		local cond_loss = ini_sys:r_float_ex(filters[obj:id()].name, "flow_rate") or 0
+		local cond_loss_factor = ini_sys:r_float_ex(filters[obj:id()].name, "flow_factor") or 0
+		local cond_koef = (toxic_dmg / filter_resist)^cond_loss_factor
+		condition_hit = cond_loss * cond_koef * toxic_air_mcm.get_config("flow_rate_mult")		-- cond loss per irl sec
+	elseif val == "no_gear" then
+		filter_resist = ini_sys:r_float_ex(obj:section(), "air_immunity") or 0
+		local cond_loss = ini_sys:r_float_ex(obj:section(), "flow_rate") or 0
+		local cond_loss_factor = ini_sys:r_float_ex(obj:section(), "flow_factor") or 0
+		local cond_koef = (toxic_dmg / filter_resist)^cond_loss_factor
+		condition_hit = cond_loss * cond_koef * toxic_air_mcm.get_config("flow_rate_mult")		-- cond loss per irl sec
+	end
+
+	return filter_resist, condition_hit
+end
+
+BuildHeader = ui_item.build_desc_header
+function ui_item.build_desc_header(obj, sec, str)
+	str = str or gc(ini_sys:r_string_ex(sec, "description"))
+	if (not str) then return "" end
+
+	local cond_str = ""
+	local cond_loss_str = ""
+	local obj_id = obj and obj:id()
+	local obj_sec = obj and obj:section()
+	local teal_clr = strformat("%c[%s,%s,%s,%s]", 255, 150, 250, 240)
+	local red_clr = strformat("%c[%s,%s,%s,%s]", 255, 250, 50, 50)
+	local blue_clr = utils_xml.get_color("d_blue")
+	local grey_clr_light = utils_xml.get_color("ui_gray_3")
+	local grey_clr_xml = utils_xml.get_color("ui_gray_2")
+	local grey_clr = utils_xml.get_color("ui_gray_1")
+	local safe_zone = actor_in_safe_zone()
+
+	-- filter on gear
+	if ((IsHeadgear(obj) or IsOutfit(obj)) and (filters[obj_id])) then
+		local resist, cond_loss = get_cond_for_ui(obj, "gear")
+		local con = math.ceil(filters[obj_id].cond * 100)
+		local cond_clr = utils_xml.get_color_con(con)
+		cond_loss = safe_zone and 0 or cond_loss
+		cond_str = teal_clr .. gc("st_krug_xd") .. " " .. grey_clr .. gc("st_filter_descr") .. " " .. cond_clr .. tostring(con)  .. "%" .. "\\n" .. grey_clr		-- test double \\n and move cond_loss_str after buildheader
+		local dmg_check_str = (resist <= toxic_dmg) and (red_clr .. gc("st_tank_doesnt_protect")) or (grey_clr_light .. round_idp(cond_loss * 10 * 60 * 100, 1) .. gc("st_tank_per_min"))
+		cond_loss_str = teal_clr .. gc("st_krug_xd") .. " " .. grey_clr .. gc("st_filter_location_rate") .. " " .. dmg_check_str .. "\\n \\n" .. grey_clr
+		cond_loss_str = toxic_dmg > 0 and cond_loss_str or ("\\n \\n" .. grey_clr)
+		return cond_str .. cond_loss_str .. BuildHeader(obj, sec, str)
+	-- filter by itself
+	elseif (sfind(obj_sec, "mask_filter")) then
+		local resist, cond_loss = get_cond_for_ui(obj, "no_gear")
+		local con = math.ceil(obj:condition() * 100)
+		local cond_clr = utils_xml.get_color_con(con)
+		cond_loss = safe_zone and 0 or cond_loss
+		cond_str = teal_clr .. gc("st_krug_xd") .. " " .. grey_clr .. gc("st_filter_descr") .. " " .. cond_clr .. tostring(con)  .. "%" .. "\\n" .. grey_clr		-- test double \\n and move cond_loss_str after buildheader
+		local dmg_check_str = (resist <= toxic_dmg) and (red_clr .. gc("st_tank_doesnt_protect")) or (grey_clr_light .. round_idp(cond_loss * 10 * 60 * 100, 1) .. gc("st_tank_per_min"))
+		cond_loss_str = teal_clr .. gc("st_krug_xd") .. " " .. grey_clr .. gc("st_filter_location_rate") .. " " .. dmg_check_str .. "\\n \\n" .. grey_clr
+		cond_loss_str = toxic_dmg > 0 and cond_loss_str or ("\\n \\n" .. grey_clr)
+		return cond_str .. cond_loss_str .. BuildHeader(obj, sec, str)
+	-- tank
+	elseif (sfind(obj_sec, "oxygen_tank")) then
+		local resist = ini_sys:r_float_ex(obj_sec, "air_immunity") or 0
+		local cond_loss = ini_sys:r_float_ex(obj_sec, "flow_rate") or 0
+		local dmg_check_str = (resist <= toxic_dmg) and (red_clr .. gc("st_tank_doesnt_protect")) or (grey_clr_light .. round_idp(cond_loss * 10 * 60 * 100, 1) .. gc("st_tank_per_min"))
+		cond_loss_str = teal_clr .. gc("st_krug_xd") .. " " .. grey_clr .. gc("st_tank_flow_rate") .. " " .. dmg_check_str .. "\\n \\n" .. grey_clr
+		return cond_loss_str .. BuildHeader(obj, sec, str)
+	-- normal str
+	else
+		return BuildHeader(obj, sec, str)
+	end
+
+end
+
+-- arti's action functor monkey patch ;]
+NameCustom = ui_inventory.UIInventory.Name_Custom
+
+function ui_inventory.UIInventory:Name_Custom(obj, bag, temp, i)
+	obj = self:CheckItem(obj,"Name_Custom " .. i)
+	if i == 9 and filters[obj:id()] then
+		return menu_filters(obj)
+	else
+		return NameCustom(self, obj, bag, temp, i)
+	end
+end
+
+ActionCustom = ui_inventory.UIInventory.Action_Custom
+function ui_inventory.UIInventory:Action_Custom(obj, bag, temp, i)
+	obj = self:CheckItem(obj,"Action_Custom " .. i)
+	if i == 9 and filters[obj:id()] then
+		func_filters(obj)
+	else
+		ActionCustom(self, obj, bag, temp, i)
+	end
+end
+
+------------------ anim (stole some from fdda) -------------------
+local cur_slot, hud_fov, det_active
+function play_ta_anm(tank_typ, filter_typ, filter_delay)		-- types: "on" / "off" / nil
+	if not toxic_air_mcm.get_config("filter_animation") then return end
+
+	-- prepare anm
+	hide_hud_inventory()
+
+	game.only_allow_movekeys(true)
+
+	hud_fov = ui_options.get("video/basic/hud_fov")
+	exec_console_cmd("hud_fov 0.65")
+
+	cur_slot = db.actor:active_slot()
+
+	det_active = db.actor:active_detector() or nil
+	if det_active then det_active:switch_state(2) end
+
+	db.actor:activate_slot(0)
+
+	local function check_n_play()
+		if db.actor:active_slot() == 0 and not db.actor:active_detector() then
+			play_anm(tank_typ, filter_typ, filter_delay)
+			return true
+		end
+		return false
+	end
+
+	CreateTimeEvent("ta_filter_anm_e", "ta_filter_anm_a", 1, check_n_play)
+
+end
+
+function play_anm(tank_typ, filter_typ, filter_delay)
+	local length = 0
+	if tank_typ ~= nil then
+		length = length + tank_anm_length
+		level.add_cam_effector("camera_effects\\pripyat_horror1.anm", 105613, false, "")
+		local tank_snd = sound_object("toxic_air\\ta_tank_" .. tank_typ)
+		tank_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
+	end
+
+	if filter_typ ~= nil then
+		length = length + game.get_motion_length("ta_filter_" .. filter_typ .. "_hud", "anm_filter_show", 1) / 1000
+		local function delay_filter_anm()
+			game.play_hud_motion(2, "ta_filter_" .. filter_typ .. "_hud", "anm_filter_show", false, 1)
+			level.add_cam_effector("toxic_air\\filter_use_" .. filter_typ .. ".anm", 105612, false, "")
+			local filter_snd = sound_object("toxic_air\\filter_use_" .. filter_typ)
+			filter_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
+			return true
+		end
+		CreateTimeEvent("ta_delay_filter_anm_e", "ta_delay_filter_anm_a", filter_delay, delay_filter_anm)
+	end
+
+	-- restore configs
+	CreateTimeEvent("ta_restore_settings_e", "ta_restore_settings_a", length, restore)
+
+end
+
+function restore()
+	game.only_allow_movekeys(false)
+
+	exec_console_cmd("hud_fov " .. hud_fov)
+
+	db.actor:activate_slot(cur_slot or 0)
+
+	if det_active then det_active:switch_state(1) end
+
+	return true
+end
+
+----------------------------- upd main --------------------------
+function actor_on_update()
+	local tg = time_global()
+	if (tmr_upd and tg < tmr_upd) then return end
+	tmr_upd = tg + 1000
+
+	server_id_table_check()
+
+	filter_cond_prot()
+
+--	news_manager.send_tip(db.actor, string.format("filter_prot [ %s ] , tank_prot [ %s ]", round_idp(filter_air_protection, 3), tank_air_protection), 0, nil, 1500)
+
+	if toxic_dmg <= 0 then return end
+
+	damage_actor()
+
+end
+
+----------------------------- binder ---------------------------
+function bind(obj)
+	obj:bind_object(oxygen_tank(obj))
+end
+
+class "oxygen_tank" (object_binder)
+
+function oxygen_tank:__init(obj) super(obj)
+	self.first_update = nil
+end
+
+function oxygen_tank:update(delta)
+	object_binder.update(self, delta)
+	local obj = self.object
+	local id = obj:id()
+
+	if not self.first_update then
+		self.first_update = true
+		if tank_cond[id] then
+			obj:set_condition(tank_cond[id])
+--			printf("- obj id: [ %s ] , sec: [ %s ] , SET COND TO: [ %s ]", id, obj:section(), tank_cond[id])
+		else
+			tank_cond[id] = obj:condition()
+--			printf("- SAVE id: [ %s ] , sec: [ %s ] , SAVE cond: [ %s ]", id, obj:section(), tank_cond[id])
+		end
+	end
+
+	local tg = time_global()
+	if (tmr_dgr and tg < tmr_dgr) then return end
+	tmr_dgr = tg + 1000
+
+	tank_degradation_and_protection(obj)
+
+	tank_cond[id] = obj:condition()
+
+end
+
+function tank_degradation_and_protection(tank)
+	local o_helm = db.actor:item_in_slot(12)
+	if not (db.actor:is_on_belt(tank)) then return end
+
+	if not (tanks[tank:id()]) then return end
+
+	local sprinting = IsMoveState('mcSprint')
+	local sprint_mult = (sprinting) and (toxic_air_mcm.get_config("tank_sprint_mult")) or 1
+
+	local tank_sec = tank:section()
+	local oxt_cond_hit = ini_sys:r_float_ex(tank_sec, "flow_rate") or 0
+	oxt_cond_hit = oxt_cond_hit * toxic_air_mcm.get_config("flow_rate_mult") * sprint_mult
+	local oxt_cond = tank:condition() - oxt_cond_hit
+	tank:set_condition(oxt_cond)
+    if not o_helm then
+	tank_air_protection = 0
+	else
+	tank_air_protection = ini_sys:r_float_ex(tank_sec, "air_immunity") or 0
+	end
+
+--	printf("tank_id: [ %s ] , condition: [ %s ] , cond_loss: [ %s ]", tank:id(), round_idp(oxt_cond, 4), oxt_cond_hit)
+
+	if tank:condition() <= 0.001 then
+		tank:set_condition(0.001)
+		tank_air_protection = 0
+	end
+
+end
+
+function oxygen_tank:reload(section)
+	object_binder.reload(self, section)
+end
+
+function oxygen_tank:reinit()
+	object_binder.reinit(self)
+end
+
+function oxygen_tank:net_spawn(se_abstract)
+	if not (object_binder.net_spawn(self, se_abstract)) then
+		return false
+	end
+    return true
+end
+
+function oxygen_tank:net_destroy()
+	object_binder.net_destroy(self)
+end
+
+function oxygen_tank:save(stpk)
+end
+
+function oxygen_tank:load(stpk)
+end
+
+-------------------------- trader artiinject -------------------------
+local trade_table = {
+
+	["bandit"] = {
+		[1] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_mask_filter_1"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_mof6"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 2,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_mof6"] = 1,
+			["af_mask_filter_2"] = 1,
+		},
+	},
+
+	["dolg"] = {
+		[1] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_1"] = 2,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_2dolg"] = 2,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 2,
+			["af_oxygen_tank_2"] = 2,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_2dolg"] = 3,
+		},
+	},
+
+	["ecolog"] = {
+		[1] = {
+			["af_oxygen_tank_2"] = 1,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_1sci"] = 1,
+			["af_mask_filter_2"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_2"] = 2,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_2"] = 2,
+			["af_mask_filter_3"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_2"] = 2,
+			["af_oxygen_tank_3"] = 2,
+			["af_mask_filter_2"] = 2,
+			["af_mask_filter_3"] = 2,
+		},
+	},
+
+	["freedom"] = {
+		[1] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_mask_filter_1"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_2"] = 2,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_2"] = 3,
+		},
+	},
+
+	["killer"] = {
+		[1] = {
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_ms4"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_ms4"] = 1,
+			["af_mask_filter_2"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_2"] = 2,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_ms4"] = 1,
+			["af_mask_filter_2"] = 2,
+			["af_mask_filter_3"] = 1,
+		},
+	},
+
+	["army"] = {
+		[1] = {
+			["af_oxygen_tank_2"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 2,
+			["af_oxygen_tank_2"] = 2,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_2"] = 1,
+		},
+	},
+
+	["monolith"] = {
+		[1] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_2"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_2"] = 2,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_2"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_2"] = 2,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_2"] = 2,
+			["af_mask_filter_3"] = 1,
+		},
+	},
+
+	["stalker"] = {
+		[1] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_mask_filter_1"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_1"] = 2,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_2"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 3,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 3,
+			["af_mask_filter_2"] = 1,
+		},
+	},
+
+	["csky"] = {
+		[1] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_1soviet"] = 1,
+			["af_mask_filter_1"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_1"] = 2,
+			["af_oxygen_tank_1soviet"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_2"] = 2,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 3,
+			["af_oxygen_tank_1soviet"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_1"] = 2,
+			["af_mask_filter_2"] = 2,
+		},
+	},
+
+	["isg"] = {
+		[1] = {
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_2"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_2"] = 2,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_2"] = 1,
+			["af_mask_filter_3isg"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_2"] = 2,
+			["af_oxygen_tank_3"] = 1,
+			["af_mask_filter_2"] = 2,
+			["af_mask_filter_3isg"] = 2,
+		},
+	},
+
+	["renegade"] = {
+		[1] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_1soviet"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_dp1"] = 1,
+		},
+		[2] = {
+			["af_oxygen_tank_1"] = 1,
+			["af_oxygen_tank_1soviet"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_dp1"] = 1,
+		},
+		[3] = {
+			["af_oxygen_tank_1"] = 2,
+			["af_oxygen_tank_1soviet"] = 1,
+			["af_oxygen_tank_2"] = 1,
+			["af_mask_filter_1"] = 1,
+			["af_mask_filter_dp1"] = 1,
+			["af_mask_filter_2"] = 1,
+		},
+	},
+
+}
+
+function oxygen_stock(npc)
+
+	local is_trader = trader_autoinject.get_trader_type(npc) == trader_autoinject.SUPPLIER
+	if not is_trader then return end
+
+	local community = npc:character_community() or "stalker"
+	local trader_table = trade_table[community] or trade_table["stalker"]
+	local supply_level = clamp(trader_autoinject.supply_level(npc, true) or 1, 1, 3)
+
+	local multiply_items_by = toxic_air_mcm.get_config("trader_items")
+	if trader_table[supply_level] then
+		for i = 1, multiply_items_by do
+			trader_autoinject.spawn_items(npc, trader_table[supply_level], true)
+		end
+	end
+
+end
+
+TraderAuto = trader_autoinject.update
+
+function trader_autoinject.update(npc)
+    TraderAuto(npc)
+    oxygen_stock(npc)
+end
+
+-------------------------- loot -------------------------
+
+-- min: 5% = 35 ; 	10% = 50 ;		15% = 60 ;		20% = 65 ;		25% = 70 ;		30% = 74 ; 		35% = 77 ; 		40% = 80
+local loot_table = {
+
+	["bandit"] = {
+		[1] = {"af_oxygen_tank_1", 35, 0.95},
+		[2] = {"af_oxygen_tank_2", 15, 0.85},
+		[3] = {"af_mask_filter_1", 45, 0.7},
+		[4] = {"af_mask_filter_mof6", 35, 0.7},
+		[5] = {"af_mask_filter_homemade", 5, 0.2},
+	},
+	["dolg"] = {
+		[1] = {"af_oxygen_tank_1", 70, 1.35},
+		[2] = {"af_oxygen_tank_2", 60, 1.15},
+		[3] = {"af_mask_filter_1", 45, 0.85},
+		[4] = {"af_mask_filter_2dolg", 55, 1.3},
+	},
+	["ecolog"] = {
+		[1] = {"af_oxygen_tank_2", 77, 1.75},
+		[2] = {"af_oxygen_tank_3", 70, 1.65},
+		[3] = {"af_mask_filter_2", 62, 1.5},
+		[4] = {"af_mask_filter_3", 59, 1.4},
+	},
+	["freedom"] = {
+		[1] = {"af_oxygen_tank_1", 55, 1.3},
+		[2] = {"af_oxygen_tank_2", 35, 1.0},
+		[3] = {"af_mask_filter_1", 59, 1.5},
+		[4] = {"af_mask_filter_2", 60, 1.1},
+		[5] = {"af_mask_filter_3", 50, 1.15},
+	},
+	["killer"] = {
+		[1] = {"af_oxygen_tank_2", 70, 1.4},
+		[2] = {"af_oxygen_tank_3", 60, 1.6},
+		[3] = {"af_mask_filter_ms4", 55, 1.2},
+		[4] = {"af_mask_filter_2", 50, 1.35},
+		[5] = {"af_mask_filter_3", 50, 1.1},
+	},
+	["army"] = {
+		[1] = {"af_oxygen_tank_2", 65, 1.3},
+		[2] = {"af_oxygen_tank_3", 45, 1.1},
+		[3] = {"af_mask_filter_1", 65, 1.0},
+		[4] = {"af_mask_filter_3", 25, 1.15},
+	},
+	["monolith"] = {
+		[1] = {"af_oxygen_tank_2", 60, 1.25},
+		[2] = {"af_oxygen_tank_3", 50, 1.1},
+		[3] = {"af_mask_filter_1", 55, 1.1},
+		[4] = {"af_mask_filter_2", 50, 1.05},
+		[5] = {"af_mask_filter_3", 45, 0.9},
+	},
+	["stalker"] = {
+		[1] = {"af_oxygen_tank_1", 60, 1.35},
+		[2] = {"af_oxygen_tank_2", 35, 1.2},
+		[3] = {"af_mask_filter_1", 55, 1.1},
+		[4] = {"af_mask_filter_2", 45, 1.0},
+		[5] = {"af_mask_filter_homemade", 5, 0.2},
+	},
+	["zombied"] = {
+		[1] = {"af_oxygen_tank_1", 35, 0.65},
+		[2] = {"af_mask_filter_1", 20, 0.65},
+	},
+	["csky"] = {
+		[1] = {"af_oxygen_tank_1", 50, 1.2},
+		[2] = {"af_oxygen_tank_2", 35, 1.0},
+		[3] = {"af_oxygen_tank_3", 35, 0.75},
+		[4] = {"af_mask_filter_1", 55, 1.0},
+		[5] = {"af_mask_filter_2", 35, 0.85},
+		[6] = {"af_oxygen_tank_1soviet", 15, 0.9},
+		[7] = {"af_mask_filter_homemade", 5, 0.2},
+	},
+	["isg"] = {
+		[1] = {"af_oxygen_tank_3", 65, 1.3},
+		[2] = {"af_mask_filter_3isg", 50, 1.1},
+	},
+	["renegade"] = {
+		[1] = {"af_oxygen_tank_1", 15, 0.9},
+		[2] = {"af_mask_filter_1", 20, 0.8},
+		[3] = {"af_mask_filter_homemade", 10, 0.2},
+		[4] = {"af_mask_filter_dp1", 25, 0.7},
+		[5] = {"af_oxygen_tank_1soviet", 15, 0.9},
+	},
+
+}
+
+local rank_table = {
+	["novice"] 			= 0.1,
+	["trainee"] 		= 0.2,
+	["experienced"] 	= 0.3,
+	["professional"] 	= 0.4,
+	["veteran"] 		= 0.45,
+	["expert"] 			= 0.5,
+	["master"] 			= 0.55,
+	["legend"] 			= 0.6,
+}
+
+function spawn_oxygen_tank(npc, npc_rank, npc_comm)
+
+	local rank = npc_rank or "novice"
+	local comm = npc_comm or "stalker"
+	local rank_chance = rank_table[rank] or rank_table["novice"]
+
+	local looting_table = loot_table[comm] or loot_table["stalker"]
+	local random_k = looting_table[rnd(1,#looting_table)]
+	local sec_to_spawn = random_k[1] or "af_oxygen_tank_1"
+	local min_cond = random_k[2] or 35
+	local comm_chance_mult = random_k[3] or 1.0
+
+	local avg_cond = 99^(rnd(min_cond, 100) / 100)
+	local spawn_chance = rank_chance * comm_chance_mult
+	local rnd_threshold = rnd()
+
+	if (rnd_threshold < spawn_chance) then
+		death_manager.spawn_with_condition(npc, sec_to_spawn, (avg_cond/100))
+	end
+
+end
+
+SpawnCosmetics = death_manager.spawn_cosmetics
+
+function death_manager.spawn_cosmetics(npc, npc_id, npc_comm, npc_rank, visual, rand_condition)
+    SpawnCosmetics(npc, npc_id, npc_comm, npc_rank, visual, rand_condition)
+    spawn_oxygen_tank(npc, npc_rank, npc_comm)
+end
+
+------------------- UI monkey patch, tnx RavenAscendant ;] -----------------------------
+base_add_bar = utils_ui.UICellItem.Add_ProgressBar
+local XMLP = CScriptXmlInit()
+XMLP:ParseFile("utils.xml")
+
+function utils_ui.UICellItem:Add_ProgressBar(xml, obj, sec, clsid)
+    if (not self.bar) and self.path == "equipment:cont_belt" then
+        self.bar = XMLP:InitProgressBar("container:cell:bar", self.cell)
+
+            local h_bar = self.bar:GetHeight()
+        self.bar:SetWndPos(vector2():set( 0 , (self.H - h_bar)))
+    end
+    base_add_bar(self, xml, obj, sec, clsid)
+end
+
+-----------------------------------------------------------------------------------------------
+function server_entity_on_unregister(se_obj, typ)
+    local id = se_obj.id
+    tank_cond[id] = nil
+end
+
+function on_game_start()
+	RegisterScriptCallback("save_state", save_state)
+	RegisterScriptCallback("load_state", load_state)
+	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+	RegisterScriptCallback("actor_item_to_belt", tank_in_belt)
+	RegisterScriptCallback("actor_item_to_ruck", tank_out_belt)
+	RegisterScriptCallback("actor_on_item_drop", tank_out_belt)
+	RegisterScriptCallback("actor_item_to_slot", filter_to_slot)
+	RegisterScriptCallback("ActorMenu_on_item_drag_drop", on_item_drag_dropped)
+	RegisterScriptCallback("actor_on_update", actor_on_update)
+	RegisterScriptCallback("server_entity_on_unregister", server_entity_on_unregister)
+end

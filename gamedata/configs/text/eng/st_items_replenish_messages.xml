@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+
+	<string id="st_not_same_tank">
+		<text>%c[d_red]You need identical oxygen tanks in order to consolidate their air supply!</text>
+	</string>
+
+	<string id="st_not_same_filter">
+		<text>%c[d_red]You need identical mask filters in order to consolidate their condition!</text>
+	</string>
+	
+	<string id="st_filter_on">
+		<text>Filter has been equipped.</text>
+	</string>
+	
+	<string id="st_filter_on_tanks_removed">
+		<text>Filter equipped: oxygen tanks have been taken off...</text>
+	</string>
+	
+	<string id="st_already_has_equipment">
+		<text>%c[d_red]You already have an oxygen tank, or your mask has a filter equipped, or you are missing appropriate headgear!</text>
+	</string>
+
+
+</string_table>
