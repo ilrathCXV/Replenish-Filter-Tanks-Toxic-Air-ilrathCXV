@@ -21,7 +21,7 @@ local filters = {
 local tanks = {
 ["af_oxygen_tank_1"] = 20,
 ["af_oxygen_tank_1soviet"] = 21,
-["af_oxygen_tank_2"] = 22,
+["af_oxygen_tank_2"] = 21, -- 22,
 ["af_oxygen_tank_3"] = 23,
 ["af_oxygen_tank_3military"] = 0,	-- 24 - debug item so it is set to zero to ignore
 }
@@ -76,25 +76,25 @@ local function on_item_drag_dropped(obj_1, obj_2, slot_from, slot_to)
 	if is_tank_1 > 0 and not is_tank_2 then return end
 	
 	-- now, time for the magic
-	original_val = obj_1:condition()
-	regen_val = obj_2:condition()
+	original_val = obj_2:condition()
+	regen_val = obj_1:condition()
 	local new_val = recharge( original_val , regen_val ) or 0
 	if new_val > 0 and new_val > original_val and new_val > regen_val then
 		if (is_filter_1 ~= 0) then
-			alife_release(obj_2)
-			obj_1:set_condition(clamp(new_val, original_val, 1))
+			alife_release(obj_1)
+			obj_2:set_condition(clamp(new_val, original_val, 1))
 			local filter_snd = sound_object("toxic_air\\filter_use_on")
 			filter_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
 			xr_sound.set_sound_play(AC_ID,"filter_use_on")
 		elseif (is_tank_1 ~= 0) then
 			if new_val > 1 then
-				obj_1:set_condition(clamp(new_val, original_val, 1))
-				obj_2:set_condition(clamp((new_val - 1), 0.01, regen_val))
+				obj_2:set_condition(clamp(new_val, original_val, 1))
+				obj_1:set_condition(clamp((new_val - 1), 0.01, regen_val))
 				local tanks_filled_snd = sound_object("toxic_air\\ta_tank_on")
 				tanks_filled_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
 			else
-				alife_release(obj_2)
-				obj_1:set_condition(clamp(new_val, original_val, 1))
+				alife_release(obj_1)
+				obj_2:set_condition(clamp(new_val, original_val, 1))
 				local tanks_consolidated_snd = sound_object("toxic_air\\ta_tank_off")
 				tanks_consolidated_snd:play_no_feedback(db.actor, sound_object.s2d, 0, VEC_ZERO, 1.0, 1.0)
 			end
