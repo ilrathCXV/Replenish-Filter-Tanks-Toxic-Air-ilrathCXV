@@ -1,5 +1,6 @@
 # Drag-n-Drop Repair Filters and Tanks for Drunk's Enhanced Toxic Air
-**DOWNLOAD Drunk's Enhanced Toxic Air IN ORDER FOR THIS TO WORK:** https://www.moddb.com/mods/stalker-anomaly/addons/drunks-enhanced-toxic-air-152
+
+**This has now been fully incorporated into Drunk's [Enhanced Toxic Air](https://www.moddb.com/mods/stalker-anomaly/addons/drunks-enhanced-toxic-air-152)! You no longer need this unless you are using the first version of his overhaul!**
 
 This mod adds some quality-of-life and user-experience additions to Drunk's Enhanced Toxic Air:
 - Repair a filter by drag-and-dropping an identical filter onto the former - you will lose one of the filters in the process
